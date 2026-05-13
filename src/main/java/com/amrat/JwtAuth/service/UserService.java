@@ -1,10 +1,12 @@
 package com.amrat.JwtAuth.service;
 
+import com.amrat.JwtAuth.dto.UserDetailsDto;
 import com.amrat.JwtAuth.repository.UserRepository;
 import com.amrat.JwtAuth.dto.RegistrationRequestDto;
 import com.amrat.JwtAuth.entity.User;
 import com.amrat.JwtAuth.entity.type.Role;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ModelMapper modelMapper;
 
     @Transactional
     public User registerUser(RegistrationRequestDto registrationRequestDto) {
@@ -35,17 +38,16 @@ public class UserService {
         return userRepository.existsByUsername(username);
     }
 
-    public User getUserByEmail(String username) {
-        return userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found."));
-    }
 
     public User findByUsername(String username) {
         return userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found."));
     }
 
-    public User getUserById(String id) {
-        return userRepository.findById(id)
+    public UserDetailsDto getUserById(String id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return modelMapper.map(user, UserDetailsDto.class);
     }
 
 }

@@ -1,6 +1,7 @@
 package com.amrat.JwtAuth.security;
 
 import com.amrat.JwtAuth.entity.User;
+import com.amrat.JwtAuth.repository.RevokedAccessTokenRepository;
 import com.amrat.JwtAuth.service.UserService;
 import com.amrat.JwtAuth.util.JwtUtil;
 import jakarta.servlet.FilterChain;
@@ -23,6 +24,7 @@ import java.io.IOException;
 public class JwtAuthFilter extends OncePerRequestFilter {
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final RevokedAccessTokenRepository revokedAccessTokenRepository;
 
     private final HandlerExceptionResolver handlerExceptionResolver;
 
@@ -32,12 +34,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try{
             final String requestTokenHeader = request.getHeader("Authorization");
 
-            if(requestTokenHeader == null || !requestTokenHeader.startsWith("Bearer")){
+            if(requestTokenHeader == null || !requestTokenHeader.startsWith("Bearer ")){
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            String token = requestTokenHeader.split("Bearer ")[1];
+            String token = requestTokenHeader.substring(7);
+            String jti = jwtUtil.getJtiFromToken(token);
+
+            if (jti != null && revokedAccessTokenRepository.existsById(jti)) {
+                throw new RuntimeException("Access token has been revoked.");
+            }
 
             String username = jwtUtil.getUsernameFromToken(token);
 

@@ -3,8 +3,11 @@ package com.amrat.JwtAuth.service;
 
 import com.amrat.JwtAuth.dto.*;
 import com.amrat.JwtAuth.entity.RefreshToken;
+import com.amrat.JwtAuth.entity.RevokedAccessToken;
 import com.amrat.JwtAuth.entity.User;
 import com.amrat.JwtAuth.repository.RefreshTokenRepository;
+import com.amrat.JwtAuth.repository.RevokedAccessTokenRepository;
+import com.amrat.JwtAuth.util.CurrentUser;
 import com.amrat.JwtAuth.util.JwtUtil;
 import com.amrat.JwtAuth.util.TokenHashUtil;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +16,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,7 +30,9 @@ public class AuthService {
     private final ModelMapper modelMapper;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RevokedAccessTokenRepository revokedAccessTokenRepository;
     private final JwtUtil jwtUtil;
+    private final CurrentUser currentUser;
 
     public RegistrationResponseDto register(RegistrationRequestDto registrationRequestDto) {
         // register user
@@ -94,6 +100,35 @@ public class AuthService {
         String newAccessToken = jwtUtil.generateAccessToken(stored.getUser());
 
         return new RefreshTokenResponseDto(newAccessToken, newRawToken);
+    }
+
+    // user logout
+    public void logout(String authorizationHeader) {
+        User user = currentUser.getCurrentUser();
+
+        if (user == null) {
+            throw new RuntimeException("Login first.");
+        }
+
+        String accessToken = extractAccessToken(authorizationHeader);
+        String jti = jwtUtil.getJtiFromToken(accessToken);
+        LocalDateTime expiresAt = jwtUtil.getExpirationFromToken(accessToken);
+
+        if (jti == null || jti.isBlank()) {
+            throw new RuntimeException("Access token id is missing.");
+        }
+
+        revokedAccessTokenRepository.save(new RevokedAccessToken(jti, expiresAt));
+        refreshTokenRepository.revokeAllByUser(user);
+        SecurityContextHolder.clearContext();
+    }
+
+    private String extractAccessToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new RuntimeException("Bearer access token is required.");
+        }
+
+        return authorizationHeader.substring(7);
     }
 
 }
