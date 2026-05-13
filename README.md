@@ -9,9 +9,11 @@ JwtAuth is a Spring Boot REST API project that implements JWT-based authenticati
 - JWT access-token generation for authenticated users
 - Refresh-token generation, hashing, persistence, expiration, and rotation
 - Refresh-token reuse detection with session revocation
+- Logout support with access-token revocation
+- Revoked access-token tracking by JWT `jti` until the token expires
 - Stateless Spring Security configuration
 - Bearer-token authentication filter for protected routes
-- JPA entities for users and refresh tokens
+- JPA entities for users, refresh tokens, and revoked access tokens
 - Repository layer using Spring Data JPA
 - DTO-based request and response models
 - ModelMapper support for entity-to-DTO conversion
@@ -110,6 +112,29 @@ Response:
 }
 ```
 
+### Logout
+
+```http
+POST /api/v1/auth/logout
+Authorization: Bearer your-jwt-access-token
+```
+
+Response:
+
+```text
+Logged out successfully.
+```
+
+Logout performs two actions:
+
+1. Extracts the current access token from the `Authorization` header.
+2. Reads the token `jti` and expiry time.
+3. Saves the `jti` in `revoked_access_tokens` until the access token naturally expires.
+4. Revokes all refresh tokens for the current authenticated user.
+5. Clears the current Spring Security context.
+
+After logout, the same access token cannot be used again. `JwtAuthFilter` checks each incoming Bearer token against `RevokedAccessTokenRepository`; if the token `jti` is found, the request is rejected.
+
 ## Authentication
 
 Protected endpoints should send the JWT access token in the `Authorization` header:
@@ -118,7 +143,9 @@ Protected endpoints should send the JWT access token in the `Authorization` head
 Authorization: Bearer your-jwt-access-token
 ```
 
-The security configuration allows all `/api/v1/auth/**` routes and requires authentication for all other routes.
+The security configuration allows `register`, `login`, and `refresh` without authentication. The `logout` route and all other protected routes require a valid Bearer access token.
+
+Access tokens include a JWT ID (`jti`) claim. This ID is used for logout-based revocation without storing the full raw access token.
 
 ## Configuration
 
@@ -150,14 +177,3 @@ On Windows:
 .\mvnw.cmd spring-boot:run
 ```
 
-## Run Tests
-
-```bash
-./mvnw test
-```
-
-On Windows:
-
-```powershell
-.\mvnw.cmd test
-```
